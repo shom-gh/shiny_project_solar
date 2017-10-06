@@ -17,6 +17,7 @@ dashboardPage(
                 min = 1, 
                 max = 12, 
                 value = 6),
+
     selectInput('state', 
                 label = h3('Select State'),
                 choices = list(state.abb = state.abb), 
@@ -34,16 +35,32 @@ dashboardPage(
     tabItem(
       tabName = "map",
       fluidRow(box(htmlOutput("map"),
-                   title = h2('Mothly Insolation Map'))
+                   title = h2('Mothly Insolation Map'),
+                   width = 12)
                ),
-      fluidRow(box(htmlOutput("hist")))
+      fluidRow(box(htmlOutput("hist"),
+                   width = 12)
+               )
     ),
     tabItem(
       tabName = "daily",
       fluidRow(
-        box(infoBoxOutput("daily"))
+        box(htmlOutput("daily"),
+            width = 12)
+        ),
+      fluidRow(
+        box(sliderInput('capacity',
+                        label = h4('Select your battery capacity'),
+                        min = 1,
+                        max = 200,
+                        value = 30)),
+        box(dateInput("date", 
+                      label = h3("Date input"), 
+                      value = "2017-01-01"),
+            width = 2)
       )
-    )
+
   )
+)
 )
 )
