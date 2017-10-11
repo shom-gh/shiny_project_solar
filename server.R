@@ -14,7 +14,7 @@ function(input, output){
   
 
 
-  hourly_cons <- reactive ({ 1000/(30*24)*input$consumption/consumption[consumption$abb == input$state, 6]*
+  hourly_cons <- reactive ({ 1000/(30*24*0.85)*input$consumption/consumption[consumption$abb == input$state, 6]*
     consumption[consumption$abb == input$state, 4]
   })
   
@@ -25,34 +25,107 @@ function(input, output){
   })
   
    test_data <- reactive({
-     temp2 <- solar_data %>% mutate(panel_perf = input$panel_efficiency/100*avg_ghi*input$area) %>%
-       mutate(cons = as.numeric(hourly_cons())) %>%
+     temp2 <- solar_data %>% mutate(Production = input$panel_efficiency/100*avg_ghi*input$area) %>%
+       mutate(Consumption = as.numeric(hourly_cons())) %>%
        #filter(State == input$state & month == month(input$date) & day == mday(input$date))
        filter(State == input$state)
      chargevec = c()
-     emptycounter <<- 0
+     runout = c()
      for (i in 1:nrow(temp2)) 
      {
        if (i ==1) {
          chargevec[i] = input$capacity*as.numeric(input$battery_cap*1000)/2
-       } else if (chargevec[i-1]+temp2$panel_perf[i] - temp2$cons[i] > input$capacity*as.numeric(input$battery_cap*1000)) {
+       } else if (chargevec[i-1]+temp2$Production[i] - temp2$Consumption[i] > input$capacity*as.numeric(input$battery_cap*1000)) {
          chargevec[i] = input$capacity*as.numeric(input$battery_cap*1000)
        } else {
-         chargevec[i] = chargevec[i-1]+temp2$panel_perf[i] - temp2$cons[i]
+         chargevec[i] = chargevec[i-1]+temp2$Production[i] - temp2$Consumption[i]
          if (chargevec[i] < 0) {
            chargevec[i] = 0
-           emptycounter <<-  emptycounter + 1
          }
        }
      }
-     temp2$charge = chargevec
+     for (i in 1:nrow(temp2))
+     {
+       runout[i] = ifelse(chargevec[i] == 0, 1, 0)
+     }
+     temp2$Charge = chargevec
+     temp2$runout = runout
      # temp2$runout = temp2[temp2$charge == 0, 7][[1]][1]
      temp2  #%>% filter(month == month(input$date) & day == mday(input$date)) 
    })
    
-  output$message1 <- renderPrint({
-     emptycounter
+
+  # output$warning <- reactive ({
+  #   max_series = as.integer(input$mppt_voltage/input$panel_voltage)
+  #   max_strings = as.integer(input$mppt_amps/input$panel_amps)
+  #   HTML(paste0('Configuration limits: \n', max_strings, ' strings, \n',
+  #               max_series, 'panles in series'))
+  # })
+   
+  output$panel_price <- renderInfoBox({
+     infoBox(
+       "Panels", 
+       paste0(as.integer(input$area/input$panel_area), ' panels in total \n',
+       as.integer(input$area/input$panel_area)*input$panel_price, '$'),
+       icon = icon("dollar"),
+       color = "blue"
+     )
   })
+  
+  output$inv_price <-  renderInfoBox({
+    infoBox(
+      'Inverters',
+      paste0('1', ' inverters in total \n',
+      as.integer(input$inv_price), '$'),
+      icon = icon("dollar"),
+      color = "blue"
+    )
+  })
+  
+  output$bat_price <-  renderInfoBox({
+    infoBox(
+      'Batteries',
+      paste0(input$capacity, ' batteries in total \n',
+             input$battery_price*input$capacity, '$'),
+      icon = icon("dollar"),
+      color = "blue"
+    )
+  })
+  
+  output$mppt_price <-  renderInfoBox({
+    infoBox(
+      'mppt',
+      paste0('1', ' converters in total \n',
+             as.integer(input$mppt_price), '$'),
+      icon = icon("dollar"),
+      color = "blue"
+    )
+  })
+  
+  output$total_price <-  renderInfoBox({
+    infoBox(
+      'total',
+      paste0('TOTAL PRICE \n',
+             as.integer(input$area/input$panel_area)*input$panel_price +
+               as.integer(input$inv_price) +
+               input$battery_price*input$capacity +
+               as.integer(input$mppt_price), '$'),
+      icon = icon("cart-arrow-down"),
+      color = "green"
+    )
+  })
+  
+  output$roi <-  renderInfoBox({
+    infoBox(
+      'roi',
+      paste0(as.integer((as.integer(input$area/input$panel_area)*input$panel_price +
+               as.integer(input$inv_price) +
+               input$battery_price*input$capacity +
+               as.integer(input$mppt_price))/(input$consumption)), ' months'),
+      icon = icon("clock-o"),
+      color = "yellow"
+    )
+  })  
    
  output$map <- renderGvis({ 
    gvisGeoChart(solar_map() %>% filter(month == input$month), "State", 'monthly_irradiance',
@@ -73,16 +146,19 @@ function(input, output){
                                 backgroundColor="#e3e3e3",
                                 legend = '{position: "none"}',
                                 titleTextStyle="{color:'white', fontName:'Roboto', fontSize:30}",
-                                vAxis="{title:'States (counts)', tltleTextStyle:{fontName:'Roboto', fontSize:40}}")
+                                vAxis="{title:'States (counts)', tltleTextStyle:{fontName:'Roboto', fontSize:40}}",
+                                yAxis="{title:'Cumulative Irradiance (kWh)'}")
                  )
    })
 
   output$statemonth <- renderGvis({
-    gvisColumnChart(solar_map() %>% filter(State == input$state), xvar = 'month' , yvar = 'monthly_irradiance',
+    gvisColumnChart(solar_map() %>% filter(State == input$state) %>% mutate(month = month.abb[month]), 
+                    xvar = 'month' , yvar = 'monthly_irradiance',
                     options = list(width = "100%", height = 400,
-                                   vAxes="[{title:'Energy (Watts)'}]",
-                                   title = 'Hourly Energy Chart',
-                                   legend="bottom",
+                                   colors="['orange']",
+                                   backgroundColor="#e3e3e3",
+                                   vAxes="[{title:'Cumulative Irradiance (kWh)'}]",
+                                   legend="none",
                                    bar="{groupWidth:'100%'}")
     )
   })
@@ -91,24 +167,27 @@ function(input, output){
  output$daily <- renderGvis({
    gvisColumnChart(test_data() %>% filter(month == month(input$date) & day == mday(input$date)), 
                    xvar = 'time' , 
-                   yvar = c( 'panel_perf', 'cons', 'charge'),
+                   yvar = c( 'Production', 'Consumption', 'Charge'),
                    options = list(width = "100%", height = 500,
                                   vAxes="[{title:'Energy (Wh)'}]",
-                                  title = 'Hourly Energy Chart',
+                                  title = 'Hourly Energy Estimations',
+                                  titleTextStyle="{color:'black', 
+                                                  fontSize:16}",
                                   legend="bottom",
                                   bar="{groupWidth:'100%'}")
                    )
    })
  output$balance <- renderGvis({
-   gvisBarChart(test_data() %>% group_by(month) %>% summarise(balance = as.integer((sum(panel_perf) - sum(cons))/1000)) %>%
+   gvisBarChart(test_data() %>% group_by(month) %>% summarise(Balance = as.integer((sum(Production) - sum(Consumption))/1000),
+                                                              Empty_Hours = -1*sum(runout)) %>%
                   mutate(month = month.abb[month]),
                 xvar = 'month',
-                yvar = 'balance',
+                yvar = c('Balance', 'Empty_Hours'),
                 options = list(height = 500,
                                title="Energy Surplus/Deficit",
                                titleTextStyle="{color:'black', 
                                               fontSize:16}",   
-                               legend = 'none',
+                               legend = 'bottom',
                                xAxes="[{title:'Energy Balance, kWh'}]")
                 )
  })

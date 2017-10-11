@@ -1,0 +1,12 @@
+name: shiny_project_solar
+title: shiny_project_solar
+username:
+account: shom
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 223885
+bundleId: 1020419
+url: https://shom.shinyapps.io/shiny_project_solar/
+when: 1507683476.41356
+asMultiple: FALSE
+asStatic: FALSE
